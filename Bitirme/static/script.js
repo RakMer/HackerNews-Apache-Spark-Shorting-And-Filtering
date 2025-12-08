@@ -3,6 +3,9 @@
 document.addEventListener('DOMContentLoaded', function() {
     loadAllData();
 
+    // Menü işlevleri
+    setupMenuEvents();
+
     const searchForm = document.getElementById('search-form');
     if (searchForm) {
         searchForm.addEventListener('submit', async (event) => {
@@ -11,6 +14,69 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// Menü İşlevleri
+function setupMenuEvents() {
+    const menuToggle = document.getElementById('menu-toggle');
+    const menuList = document.getElementById('menu-list');
+    const menuLinks = document.querySelectorAll('.menu-link');
+
+    // Mobil menü toggle
+    if (menuToggle) {
+        menuToggle.addEventListener('click', function() {
+            menuList.classList.toggle('active');
+        });
+    }
+
+    // Menü linklerine tıklanınca
+    menuLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            const page = this.getAttribute('data-page');
+            navigateToPage(page);
+
+            // Aktif linki güncelle
+            menuLinks.forEach(l => l.classList.remove('active'));
+            this.classList.add('active');
+
+            // Mobil menüyü kapat
+            if (window.innerWidth <= 768) {
+                menuList.classList.remove('active');
+            }
+        });
+    });
+
+    // Anasayfa linkini başta aktif yap
+    document.querySelector('[data-page="home"]').classList.add('active');
+}
+
+// Sayfa Yönlendirmesi
+function navigateToPage(page) {
+    const sections = document.querySelectorAll('.page-section');
+    sections.forEach(section => section.classList.remove('active'));
+
+    switch(page) {
+        case 'home':
+            document.getElementById('home-page').classList.add('active');
+            break;
+        case 'search':
+            document.getElementById('search-page').classList.add('active');
+            break;
+        case 'ai-articles':
+            document.getElementById('ai-articles-page').classList.add('active');
+            break;
+        case 'top-stories':
+            document.getElementById('top-stories-page').classList.add('active');
+            break;
+        case 'top-authors':
+            document.getElementById('top-authors-page').classList.add('active');
+            break;
+        case 'top-articles':
+            document.getElementById('top-articles-page').classList.add('active');
+            break;
+    }
+}
 
 function showLoading() {
     document.getElementById('loading-spinner').classList.remove('hidden');
@@ -81,6 +147,9 @@ async function loadAllData() {
         // İstatistikler
         displayStatistics(data.statistics);
 
+        // Anasayfa için Top Articles (10)
+        displayHomeTopArticles(data.top_articles);
+
         // AI Makaleleri
         displayAIArticles(data.ai_articles);
 
@@ -90,7 +159,7 @@ async function loadAllData() {
         // En Çok Yazar
         displayTopAuthors(data.top_authors);
 
-        // En Yüksek Puan Alan Makaleler
+        // En Yüksek Puan Alan Makaleler (ayrı sayfa)
         displayTopArticles(data.top_articles);
 
         hideLoading();
@@ -110,6 +179,32 @@ function displayStatistics(stats) {
     document.querySelectorAll('.stat-card').forEach(card => {
         card.classList.remove('loading');
     });
+}
+
+// Anasayfa için En Puanlı 10 Makale
+function displayHomeTopArticles(articles) {
+    const container = document.getElementById('home-top-articles');
+    container.innerHTML = '';
+
+    if (articles.length === 0) {
+        container.innerHTML = '<p style="grid-column: 1/-1;">Makale bulunamadı</p>';
+        return;
+    }
+
+    articles.forEach((article, index) => {
+        const card = document.createElement('div');
+        card.className = 'data-card';
+        const title = article.title ? escapeHtml(String(article.title)) : 'Başlık yok';
+        const points = article.points || 0;
+        card.innerHTML = `
+            <h4>#${index + 1} - ${title}</h4>
+            <p class="label">Puan</p>
+            <p class="value">${points.toLocaleString('tr-TR')}</p>
+        `;
+        container.appendChild(card);
+    });
+
+    container.classList.remove('loading');
 }
 
 function displayAIArticles(articles) {
