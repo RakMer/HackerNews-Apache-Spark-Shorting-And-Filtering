@@ -1,5 +1,16 @@
 // HackerNews Spark Analizi - JavaScript
 
+// Arama state yönetimi
+let searchState = {
+    keyword: '',
+    author: '',
+    sort: 'date_desc',
+    offset: 0,
+    limit: 20,
+    hasMore: true,
+    results: []
+};
+
 document.addEventListener('DOMContentLoaded', function() {
     loadAllData();
 
@@ -10,7 +21,15 @@ document.addEventListener('DOMContentLoaded', function() {
     if (searchForm) {
         searchForm.addEventListener('submit', async (event) => {
             event.preventDefault();
-            await runSearch();
+            await runSearch(true); // true = yeni arama
+        });
+    }
+
+    // Daha fazla göster butonu
+    const loadMoreBtn = document.getElementById('load-more-btn');
+    if (loadMoreBtn) {
+        loadMoreBtn.addEventListener('click', async () => {
+            await loadMoreResults();
         });
     }
 });
@@ -95,21 +114,30 @@ function showError(message) {
     }, 5000);
 }
 
-async function runSearch() {
+async function runSearch(isNewSearch = true) {
     const container = document.getElementById('search-results');
+    const loadMoreContainer = document.getElementById('load-more-container');
     if (!container) return;
 
-    container.classList.add('loading');
-    container.innerHTML = '<p>Arama yapılıyor...</p>';
+    if (isNewSearch) {
+        // Yeni arama - state'i sıfırla
+        searchState.keyword = document.getElementById('keyword')?.value.trim() || '';
+        searchState.author = document.getElementById('author')?.value.trim() || '';
+        searchState.sort = document.getElementById('sort')?.value || 'date_desc';
+        searchState.offset = 0;
+        searchState.results = [];
+        searchState.hasMore = true;
 
-    const keyword = document.getElementById('keyword')?.value.trim();
-    const author = document.getElementById('author')?.value.trim();
-    const sort = document.getElementById('sort')?.value || 'date_desc';
+        container.classList.add('loading');
+        container.innerHTML = '<p>Arama yapılıyor...</p>';
+        loadMoreContainer?.classList.add('hidden');
+    }
 
     const params = new URLSearchParams();
-    if (keyword) params.append('keyword', keyword);
-    if (author) params.append('author', author);
-    if (sort) params.append('sort', sort);
+    if (searchState.keyword) params.append('keyword', searchState.keyword);
+    if (searchState.author) params.append('author', searchState.author);
+    if (searchState.sort) params.append('sort', searchState.sort);
+    params.append('limit', searchState.limit.toString());
 
     try {
         const response = await fetch(`/api/articles?${params.toString()}`);
@@ -121,12 +149,85 @@ async function runSearch() {
             return;
         }
 
-        displaySearchResults(result.data || []);
+        const newResults = result.data || [];
+        
+        if (isNewSearch) {
+            searchState.results = newResults;
+            displaySearchResults(searchState.results);
+        }
+
+        // Daha fazla veri var mı kontrolü
+        searchState.hasMore = newResults.length >= searchState.limit;
+        
+        // Load more butonunu göster/gizle
+        if (searchState.hasMore && searchState.results.length > 0) {
+            loadMoreContainer?.classList.remove('hidden');
+        } else {
+            loadMoreContainer?.classList.add('hidden');
+        }
+
     } catch (error) {
         console.error('Arama hatası:', error);
         showError('Sunucuya bağlanılamadı');
     } finally {
         container.classList.remove('loading');
+    }
+}
+
+async function loadMoreResults() {
+    const container = document.getElementById('search-results');
+    const loadMoreBtn = document.getElementById('load-more-btn');
+    const loadMoreContainer = document.getElementById('load-more-container');
+    
+    if (!container || !loadMoreBtn) return;
+
+    // Butonu disable et
+    loadMoreBtn.disabled = true;
+    loadMoreBtn.textContent = 'Yükleniyor...';
+
+    searchState.offset += searchState.limit;
+
+    const params = new URLSearchParams();
+    if (searchState.keyword) params.append('keyword', searchState.keyword);
+    if (searchState.author) params.append('author', searchState.author);
+    if (searchState.sort) params.append('sort', searchState.sort);
+    params.append('limit', searchState.limit.toString());
+
+    try {
+        const response = await fetch(`/api/articles?${params.toString()}`);
+        const result = await response.json();
+
+        if (!result.success) {
+            showError(result.error || 'Veri yüklenemedi');
+            loadMoreBtn.disabled = false;
+            loadMoreBtn.textContent = 'Daha Fazla Göster (20+)';
+            return;
+        }
+
+        const newResults = result.data || [];
+        
+        if (newResults.length > 0) {
+            // Yeni sonuçları ekle
+            searchState.results = [...searchState.results, ...newResults];
+            displaySearchResults(searchState.results);
+        }
+
+        // Daha fazla veri var mı kontrolü
+        searchState.hasMore = newResults.length >= searchState.limit;
+        
+        if (!searchState.hasMore || newResults.length === 0) {
+            loadMoreContainer?.classList.add('hidden');
+            if (newResults.length === 0) {
+                showError('Daha fazla sonuç bulunamadı');
+            }
+        }
+
+    } catch (error) {
+        console.error('Yükleme hatası:', error);
+        showError('Sunucuya bağlanılamadı');
+    } finally {
+        loadMoreBtn.disabled = false;
+        loadMoreBtn.textContent = 'Daha Fazla Göster (20+)';
     }
 }
 
@@ -193,14 +294,24 @@ function displayHomeTopArticles(articles) {
 
     articles.forEach((article, index) => {
         const card = document.createElement('div');
-        card.className = 'data-card';
+        card.className = 'data-card clickable-card';
         const title = article.title ? escapeHtml(String(article.title)) : 'Başlık yok';
         const points = article.points || 0;
+        const url = article.url || null;
+        
         card.innerHTML = `
             <h4>#${index + 1} - ${title}</h4>
             <p class="label">Puan</p>
             <p class="value">${points.toLocaleString('tr-TR')}</p>
         `;
+        
+        if (url) {
+            card.style.cursor = 'pointer';
+            card.addEventListener('click', () => {
+                window.open(url, '_blank');
+            });
+        }
+        
         container.appendChild(card);
     });
 
@@ -287,14 +398,24 @@ function displayTopArticles(articles) {
 
     articles.forEach((article, index) => {
         const card = document.createElement('div');
-        card.className = 'data-card';
+        card.className = 'data-card clickable-card';
         const title = article.title ? escapeHtml(String(article.title)) : 'Başlık yok';
         const points = article.points || 0;
+        const url = article.url || null;
+        
         card.innerHTML = `
             <h4>#${index + 1} - ${title}</h4>
             <p class="label">Puan</p>
             <p class="value">${points.toLocaleString('tr-TR')}</p>
         `;
+        
+        if (url) {
+            card.style.cursor = 'pointer';
+            card.addEventListener('click', () => {
+                window.open(url, '_blank');
+            });
+        }
+        
         container.appendChild(card);
     });
 
@@ -314,11 +435,12 @@ function displaySearchResults(articles) {
 
     articles.forEach((article, index) => {
         const card = document.createElement('div');
-        card.className = 'data-card';
+        card.className = 'data-card clickable-card';
         const title = article.title ? escapeHtml(String(article.title)) : 'Başlık yok';
         const author = article.author ? escapeHtml(String(article.author)) : 'Bilinmeyen';
         const points = article.points || 0;
         const createdAt = article.created_at ? new Date(article.created_at).toLocaleString('tr-TR') : 'Tarih yok';
+        const url = article.url || null;
 
         card.innerHTML = `
             <h4>#${index + 1} - ${title}</h4>
@@ -330,6 +452,13 @@ function displaySearchResults(articles) {
             <p>${createdAt}</p>
         `;
 
+        if (url) {
+            card.style.cursor = 'pointer';
+            card.addEventListener('click', () => {
+                window.open(url, '_blank');
+            });
+        }
+        
         container.appendChild(card);
     });
 
@@ -338,16 +467,24 @@ function displaySearchResults(articles) {
 
 function createArticleCard(article, index) {
     const card = document.createElement('div');
-    card.className = 'data-card';
+    card.className = 'data-card clickable-card';
     
     const title = article.title ? escapeHtml(String(article.title)) : 'Başlık yok';
     const author = article.author ? escapeHtml(String(article.author)) : 'Bilinmeyen';
+    const url = article.url || null;
     
     card.innerHTML = `
         <h4>#${index + 1} - ${title}</h4>
         <p class="label">Yazar</p>
         <p>${author}</p>
     `;
+    
+    if (url) {
+        card.style.cursor = 'pointer';
+        card.addEventListener('click', () => {
+            window.open(url, '_blank');
+        });
+    }
     
     return card;
 }

@@ -34,6 +34,7 @@ def get_dataframe(spark):
                 "story_id": 1,
                 "points": 1,
                 "created_at_i": 1,
+                "url": 1,
             },
         )
         raw_data = list(cursor)
@@ -72,6 +73,8 @@ def get_dataframe(spark):
                 except Exception:
                     created_at_i = None
 
+            url = doc.get("url")
+
             data.append(
                 {
                     "title": title,
@@ -79,6 +82,7 @@ def get_dataframe(spark):
                     "story_id": story_id,
                     "points": points,
                     "created_at_i": created_at_i,
+                    "url": url,
                 }
             )
 
@@ -92,18 +96,18 @@ def get_dataframe(spark):
         print("Boş DataFrame döndürülüyor...")
         return spark.createDataFrame(
             [],
-            "title STRING, author STRING, story_id STRING, points INT, created_at_i LONG, created_at TIMESTAMP",
+            "title STRING, author STRING, story_id STRING, points INT, created_at_i LONG, created_at TIMESTAMP, url STRING",
         )
 
 def query_ai_articles(df, limit=50):
     """AI başlıklı makaleleri bul"""
     result = (
         df.filter(F.lower(F.col("title")).contains("ai"))
-        .select("title", "author")
+        .select("title", "author", "url")
         .limit(limit)
         .collect()
     )
-    return [{"title": row["title"], "author": row["author"]} for row in result]
+    return [{"title": row["title"], "author": row["author"], "url": row["url"]} for row in result]
 
 def query_top_stories(df, limit=10):
     """En çok yoruma sahip hikayeler"""
@@ -141,12 +145,12 @@ def query_top_articles_by_points(df, limit=10):
     """En yüksek puan alan makaleler"""
     result = (
         df.filter(F.col("points").isNotNull())
-        .select("title", "points")
+        .select("title", "points", "url")
         .orderBy(F.desc("points"))
         .limit(limit)
         .collect()
     )
-    return [{"title": row["title"], "points": row["points"]} for row in result]
+    return [{"title": row["title"], "points": row["points"], "url": row["url"]} for row in result]
 
 
 def query_articles(df, keyword=None, author=None, sort="date_desc", limit=20):
@@ -176,7 +180,7 @@ def query_articles(df, keyword=None, author=None, sort="date_desc", limit=20):
 
     result = (
         result_df
-        .select("title", "author", "points", "created_at")
+        .select("title", "author", "points", "created_at", "url")
         .orderBy(sort_key)
         .limit(limit)
         .collect()
@@ -192,6 +196,7 @@ def query_articles(df, keyword=None, author=None, sort="date_desc", limit=20):
                 "author": row["author"],
                 "points": row["points"],
                 "created_at": created_at_iso,
+                "url": row["url"],
             }
         )
 
