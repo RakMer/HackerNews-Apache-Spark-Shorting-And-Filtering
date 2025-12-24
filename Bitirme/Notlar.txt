@@ -8,3 +8,5 @@ db.test.insertMany([{},{},{}])
 
 
 çalıştırma :  spark-submit --packages org.mongodb.spark:mongo-spark-connector_2.12:10.3.0 Test.py
+
+brew services start mongodb-community veritabanını başlatma
